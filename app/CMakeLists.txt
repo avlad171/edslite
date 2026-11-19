@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.22)
 
 add_definitions(-DANDROID )
 include_directories(src/main/native/crypto)
@@ -96,6 +96,37 @@ add_library( edsgost
        SHARED
              src/main/native/gost/edsgost.c
              src/main/native/gost/gost89.c )
+
+# Read-only ext2/3/4 driver (lwext4 + EDS glue). See src/main/native/lwext4/EDS-PATCHES.txt
+file(GLOB LWEXT4_SRC src/main/native/lwext4/src/*.c)
+list(FILTER LWEXT4_SRC EXCLUDE REGEX ".*ext4_mkfs\\.c$")
+add_library( edsext4
+             SHARED
+             ${LWEXT4_SRC}
+             src/main/native/ext4/edsext4_core.c
+             src/main/native/ext4/edsext4_jni.c )
+target_include_directories( edsext4 PRIVATE src/main/native/lwext4/include src/main/native/ext4 )
+target_compile_definitions( edsext4 PRIVATE
+        CONFIG_USE_DEFAULT_CFG=1 CONFIG_EXT4_MOUNTPOINTS_COUNT=8 CONFIG_EXT4_BLOCKDEVS_COUNT=8
+        CONFIG_BLOCK_DEV_CACHE_SIZE=64 CONFIG_DEBUG_PRINTF=0 CONFIG_HAVE_OWN_ASSERT=0
+        CONFIG_HAVE_OWN_ERRNO=0 _FILE_OFFSET_BITS=64 )
+# Assertions stay on (abort beats memory corruption on a malformed volume).
+target_compile_options( edsext4 PRIVATE -UNDEBUG -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-parameter )
+target_link_libraries( edsext4 ${log-lib} )
+
+# LUKS2 crypto (Argon2 reference + AES-XTS on Gladman AES). Read-only: decrypt only.
+add_library( edsluks
+             SHARED
+             src/main/native/luks/edsluks.c
+             src/main/native/aes/aeskey.c src/main/native/aes/aescrypt.c src/main/native/aes/aestab.c
+             src/main/native/argon2/src/argon2.c src/main/native/argon2/src/core.c
+             src/main/native/argon2/src/encoding.c src/main/native/argon2/src/ref.c
+             src/main/native/argon2/src/thread.c src/main/native/argon2/src/blake2/blake2b.c )
+target_include_directories( edsluks PRIVATE src/main/native/aes src/main/native/crypto
+        src/main/native/argon2/include src/main/native/argon2/src )
+target_compile_definitions( edsluks PRIVATE AES_128 )
+target_compile_options( edsluks PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-function )
+target_link_libraries( edsluks ${log-lib} )
 
 include(CMakeLists-full.txt)
 include(CMakeLists-fsm.txt)

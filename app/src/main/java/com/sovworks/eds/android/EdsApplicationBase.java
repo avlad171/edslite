@@ -7,8 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
-import android.support.multidex.MultiDexApplication;
-import android.support.v4.content.LocalBroadcastManager;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.widget.Toast;
 
 import com.sovworks.eds.android.helpers.ExtendedFileInfoLoader;
@@ -30,7 +29,7 @@ import java.util.regex.Pattern;
 
 import static com.sovworks.eds.android.settings.UserSettings.getSettings;
 
-public class EdsApplicationBase extends MultiDexApplication
+public class EdsApplicationBase extends android.app.Application
 {
 	public static final String BROADCAST_EXIT = "com.sovworks.eds.android.BROADCAST_EXIT";
 
@@ -63,14 +62,26 @@ public class EdsApplicationBase extends MultiDexApplication
 		}
 	}
 
-	public static void exitProcess()
+	/**
+	 * Kills the process after a 4 s grace period (lets services stop and temp files be wiped).
+	 * If the user reopens EDS within that window, the pending exit is cancelled (see
+	 * {@link #cancelPendingExit}); otherwise the freshly opened screen was killed a moment later.
+	 */
+	public static synchronized void exitProcess()
 	{
-		Timer t = new Timer();
-		t.schedule(new TimerTask()
+		if(_exitTimer != null)
+			_exitTimer.cancel();
+		_exitTimer = new Timer();
+		_exitTimer.schedule(new TimerTask()
 		{
 			@Override
 			public void run()
 			{
+				synchronized (EdsApplicationBase.class)
+				{
+					if(_exitTimer == null)
+						return; // cancelled meanwhile
+				}
 				try
 				{
 					System.exit(0);
@@ -83,10 +94,34 @@ public class EdsApplicationBase extends MultiDexApplication
 		}, 4000);
 	}
 
+	static synchronized void cancelPendingExit()
+	{
+		if(_exitTimer != null)
+		{
+			Logger.debug("EDS reopened during exit: cancelling the pending process exit");
+			_exitTimer.cancel();
+			_exitTimer = null;
+		}
+	}
+
+	private static Timer _exitTimer;
+
     public void onCreate()
 	{
 		super.onCreate();
 		PRNGFixes.apply();
+		com.sovworks.eds.android.helpers.EdgeToEdgeInsets.install(this);
+		registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks()
+		{
+			@Override public void onActivityPreCreated(android.app.Activity a, android.os.Bundle b) { cancelPendingExit(); }
+			@Override public void onActivityCreated(android.app.Activity a, android.os.Bundle b) { }
+			@Override public void onActivityStarted(android.app.Activity a) { }
+			@Override public void onActivityResumed(android.app.Activity a) { }
+			@Override public void onActivityPaused(android.app.Activity a) { }
+			@Override public void onActivityStopped(android.app.Activity a) { }
+			@Override public void onActivitySaveInstanceState(android.app.Activity a, android.os.Bundle b) { }
+			@Override public void onActivityDestroyed(android.app.Activity a) { }
+		});
 
 		SystemConfig.setInstance(new com.sovworks.eds.android.settings.SystemConfig(getApplicationContext()));
 

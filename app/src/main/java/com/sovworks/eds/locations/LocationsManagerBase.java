@@ -1,5 +1,7 @@
 package com.sovworks.eds.locations;
 
+import androidx.core.content.ContextCompat;
+
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -22,6 +24,8 @@ import com.sovworks.eds.android.locations.EncFsLocationBase;
 import com.sovworks.eds.android.locations.ExternalStorageLocation;
 import com.sovworks.eds.android.locations.InternalSDLocation;
 import com.sovworks.eds.android.locations.LUKSLocation;
+import com.sovworks.eds.android.locations.UsbDriveLocation;
+import com.sovworks.eds.android.locations.UsbLuksLocation;
 import com.sovworks.eds.android.locations.TrueCryptLocation;
 import com.sovworks.eds.android.locations.VeraCryptLocation;
 import com.sovworks.eds.android.locations.closer.fragments.OpenableLocationCloserFragment;
@@ -211,7 +215,7 @@ public abstract class LocationsManagerBase
 		Intent i = new Intent(BROADCAST_LOCATION_CHANGED);
 		//i.setData(location.getLocationUri());
 		i.putExtra(PARAM_LOCATION_URI, location.getLocationUri());
-		context.sendBroadcast(i);
+		context.sendBroadcast(i.setPackage(context.getPackageName()));
 	}
 
 	public static void broadcastLocationAdded(Context context,Location location)
@@ -220,7 +224,7 @@ public abstract class LocationsManagerBase
 		//i.setData(location.getLocationUri());
 		if(location!=null)
 			i.putExtra(PARAM_LOCATION_URI, location.getLocationUri());
-		context.sendBroadcast(i);
+		context.sendBroadcast(i.setPackage(context.getPackageName()));
 	}
 
 	public static void broadcastLocationRemoved(Context context,Location location)
@@ -229,13 +233,13 @@ public abstract class LocationsManagerBase
 		//i.setData(location.getLocationUri());
 		if(location!=null)
 			i.putExtra(PARAM_LOCATION_URI, location.getLocationUri());
-		context.sendBroadcast(i);
+		context.sendBroadcast(i.setPackage(context.getPackageName()));
 	}
 
 	@SuppressWarnings("WeakerAccess")
 	public static void broadcastAllContainersClosed(Context context)
 	{
-		context.sendBroadcast(new Intent(BROADCAST_ALL_CONTAINERS_CLOSED));
+		context.sendBroadcast(new Intent(BROADCAST_ALL_CONTAINERS_CLOSED).setPackage(context.getPackageName()));
 	}
 
 	public static ArrayList<String> makeUriStrings(Iterable<? extends Location> locations)
@@ -265,11 +269,11 @@ public abstract class LocationsManagerBase
 		if(_mediaChangedReceiver != null)
 			return;
 		_mediaChangedReceiver = new MediaMountedReceiver(this);
-		_context.registerReceiver(_mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_MOUNTED));
-		_context.registerReceiver(_mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_UNMOUNTED));
-		_context.registerReceiver(_mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_REMOVED));
-		_context.registerReceiver(_mediaChangedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED));
-		_context.registerReceiver(_mediaChangedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
+		ContextCompat.registerReceiver(_context, _mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_MOUNTED), ContextCompat.RECEIVER_NOT_EXPORTED);
+		ContextCompat.registerReceiver(_context, _mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_UNMOUNTED), ContextCompat.RECEIVER_NOT_EXPORTED);
+		ContextCompat.registerReceiver(_context, _mediaChangedReceiver, new IntentFilter(Intent.ACTION_MEDIA_REMOVED), ContextCompat.RECEIVER_NOT_EXPORTED);
+		ContextCompat.registerReceiver(_context, _mediaChangedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED), ContextCompat.RECEIVER_NOT_EXPORTED);
+		ContextCompat.registerReceiver(_context, _mediaChangedReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED), ContextCompat.RECEIVER_NOT_EXPORTED);
 	}
 
 	public void close()
@@ -726,6 +730,10 @@ public abstract class LocationsManagerBase
 				return createEncFsLocation(locationUri);
 			case LUKSLocation.URI_SCHEME:
 				return createLUKSLocation(locationUri);
+			case UsbLuksLocation.URI_SCHEME:
+				return new UsbLuksLocation(locationUri, this, getContext(), _settings);
+			case UsbDriveLocation.URI_SCHEME:
+				return new UsbDriveLocation(locationUri, _settings);
 			case ContentResolver.SCHEME_CONTENT:
 				if(DocumentTreeLocation.isDocumentTreeUri(_context, locationUri))
 					return createDocumentTreeLocation(locationUri);
@@ -829,6 +837,10 @@ public abstract class LocationsManagerBase
 				return EncFsLocationBase.getLocationId(this, locationUri);
 			case LUKSLocation.URI_SCHEME:
 				return LUKSLocation.getLocationId(this, locationUri);
+			case UsbLuksLocation.URI_SCHEME:
+				return UsbLuksLocation.getLocationId(locationUri);
+			case UsbDriveLocation.URI_SCHEME:
+				return UsbDriveLocation.getLocationId(locationUri);
 			case ContentResolver.SCHEME_CONTENT:
 				if(DocumentTreeLocation.isDocumentTreeUri(_context, locationUri))
 					return DocumentTreeLocation.getLocationId(locationUri);

@@ -11,7 +11,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.ActionMode;
@@ -62,8 +62,8 @@ import com.sovworks.eds.fs.util.SrcDstSingle;
 import com.sovworks.eds.locations.Location;
 import com.sovworks.eds.locations.LocationsManager;
 import com.sovworks.eds.settings.GlobalConfig;
-import com.trello.rxlifecycle2.android.FragmentEvent;
-import com.trello.rxlifecycle2.components.RxFragment;
+import com.trello.rxlifecycle3.android.FragmentEvent;
+import com.trello.rxlifecycle3.components.RxFragment;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -239,18 +239,21 @@ public abstract class FileListViewFragmentBase extends RxFragment implements
         Logger.debug(String.format("onPrepareOptionsMenu: isReading=%b isSendAction=%b hasInClipboard=%b isSelectAction=%b",
                 isReading, isSendAction, hasInClipboard, isSelectAction));
 
+        boolean ro = isCurrentLocationReadOnly();
         menu.findItem(R.id.progressbar).setVisible(isReading);
-        menu.findItem(R.id.copy).setVisible(!isReading && !isSelectAction && (isSendAction || hasInClipboard));
-        menu.findItem(R.id.move).setVisible(!isReading && !isSelectAction && hasInClipboard);
+        menu.findItem(R.id.copy).setVisible(!isReading && !ro && !isSelectAction && (isSendAction || hasInClipboard));
+        menu.findItem(R.id.move).setVisible(!isReading && !ro && !isSelectAction && hasInClipboard);
 
         menu.findItem(R.id.new_file).setVisible(
                 !isReading
+                        && !ro
                         && !isSendAction
                         && allowCreateNewFile()
                         && (!isSelectAction || getFileManagerActivity().allowFileSelect())
         );
         menu.findItem(R.id.new_dir).setVisible(
                 !isReading
+                        && !ro
                         && allowCreateNewFolder()
         );
         menu.findItem(R.id.select_all).setVisible((!isSelectAction || !isSingleSelectionMode()) && !getSelectableFiles().isEmpty());
@@ -848,14 +851,15 @@ public abstract class FileListViewFragmentBase extends RxFragment implements
                                 hasSelectedFiles &&
                                 (!showSelectedFilenameEditText() || allowSelectedFileName())
                 );
-                menu.findItem(R.id.rename).setVisible(!isSelectAction && selectedFiles.size() == 1);
+                boolean ro = isCurrentLocationReadOnly();
+                menu.findItem(R.id.rename).setVisible(!isSelectAction && !ro && selectedFiles.size() == 1);
                 menu.findItem(R.id.open_as_container).setVisible(!isSelectAction &&
                         selectedFiles.size() == 1 &&
                         selectedFiles.get(0) instanceof ExecutableFileRecord
                 );
                 menu.findItem(R.id.copy_to_temp).setVisible(!isSelectAction && getLocation().isEncrypted());
                 menu.findItem(R.id.choose_for_operation).setVisible(!isSelectAction);
-                menu.findItem(R.id.delete).setVisible(!isSelectAction);
+                menu.findItem(R.id.delete).setVisible(!isSelectAction && !ro);
                 Location loc = getRealLocation();
                 menu.findItem(R.id.wipe).setVisible(
                         !isSelectAction &&
@@ -917,66 +921,96 @@ public abstract class FileListViewFragmentBase extends RxFragment implements
 
     protected boolean handleMenu(MenuHandlerInfo mhi)
     {
-        switch (mhi.menuItemId)
+        final int id = mhi.menuItemId;
+        if (id == R.id.select)
         {
-            case R.id.select:
-                returnSelectedFiles();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.new_file:
-                showNewFileDialog(false);
-                return true;
-            case R.id.new_dir:
-                showNewFileDialog(true);
-                return true;
-            case R.id.rename:
-                showRenameDialog();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.open_as_container:
-                openFileAsContainer();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.choose_for_operation:
-                chooseFilesForOperation();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.delete:
-                confirmDelete(false);
-                mhi.clearSelection = true;
-                return true;
-            case R.id.wipe:
-                confirmDelete(true);
-                mhi.clearSelection = true;
-                return true;
-            case R.id.copy:
-                if(isSendAction())
-                    pasteSentFiles();
-                else
-                    pasteFiles(false);
-                return true;
-            case R.id.move:
-                pasteFiles(true);
-                return true;
-            case R.id.properties:
-                showProperties();
-                return true;
-            case R.id.copy_to_temp:
-                copyToTemp();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.sort:
-                changeSortMode();
-                return true;
-            case R.id.select_all:
-                selectAllFiles();
-                return true;
-            case R.id.send:
-                sendFiles();
-                mhi.clearSelection = true;
-                return true;
-            default:
-                return false;
+            returnSelectedFiles();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.new_file)
+        {
+            showNewFileDialog(false);
+            return true;
+        }
+        else if (id == R.id.new_dir)
+        {
+            showNewFileDialog(true);
+            return true;
+        }
+        else if (id == R.id.rename)
+        {
+            showRenameDialog();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.open_as_container)
+        {
+            openFileAsContainer();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.choose_for_operation)
+        {
+            chooseFilesForOperation();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.delete)
+        {
+            confirmDelete(false);
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.wipe)
+        {
+            confirmDelete(true);
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.copy)
+        {
+            if(isSendAction())
+                pasteSentFiles();
+            else
+                pasteFiles(false);
+            return true;
+        }
+        else if (id == R.id.move)
+        {
+            pasteFiles(true);
+            return true;
+        }
+        else if (id == R.id.properties)
+        {
+            showProperties();
+            return true;
+        }
+        else if (id == R.id.copy_to_temp)
+        {
+            copyToTemp();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.sort)
+        {
+            changeSortMode();
+            return true;
+        }
+        else if (id == R.id.select_all)
+        {
+            selectAllFiles();
+            return true;
+        }
+        else if (id == R.id.send)
+        {
+            sendFiles();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else
+        {
+            return false;
         }
     }
 
@@ -1402,6 +1436,13 @@ public abstract class FileListViewFragmentBase extends RxFragment implements
             onSelectionChanged();
         }
 	}
+
+    /** Write actions are hidden on read-only locations (e.g. USB LUKS volumes, read-only mounts). */
+    private boolean isCurrentLocationReadOnly()
+    {
+        Location loc = getRealLocation();
+        return loc != null && loc.isReadOnly();
+    }
 
     private boolean showSelectedFilenameEditText()
     {

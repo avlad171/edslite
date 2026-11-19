@@ -77,16 +77,18 @@ public abstract class CreateEDSLocationFragmentBase extends PropertiesFragmentBa
     @Override
 	public boolean onOptionsItemSelected(MenuItem menuItem)
     {
-        switch (menuItem.getItemId())
+        final int id = menuItem.getItemId();
+        if (id == R.id.confirm)
         {
-            case R.id.confirm:
-                if(_state.getBoolean(ARG_ADD_EXISTING_LOCATION))
-                    startAddLocationTask();
-                else
-                    startCreateLocationTask();
-                return true;
-            default:
-                return super.onOptionsItemSelected(menuItem);
+            if(_state.getBoolean(ARG_ADD_EXISTING_LOCATION))
+                startAddLocationTask();
+            else
+                startCreateLocationTask();
+            return true;
+        }
+        else
+        {
+            return super.onOptionsItemSelected(menuItem);
         }
     }
 

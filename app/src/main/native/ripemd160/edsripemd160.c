@@ -1,3 +1,4 @@
+#include <string.h>
 #include "com_sovworks_eds_crypto_hash_RIPEMD160.h"
 
 #include <stdlib.h>

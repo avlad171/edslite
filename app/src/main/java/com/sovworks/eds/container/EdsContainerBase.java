@@ -17,6 +17,7 @@ import com.sovworks.eds.fs.FileSystem;
 import com.sovworks.eds.fs.Path;
 import com.sovworks.eds.fs.RandomAccessIO;
 import com.sovworks.eds.fs.exfat.ExFat;
+import com.sovworks.eds.fs.ext4.Ext4FS;
 import com.sovworks.eds.fs.fat.FatFS;
 import com.sovworks.eds.fs.std.StdFs;
 import com.sovworks.eds.fs.std.StdFsPath;
@@ -68,6 +69,14 @@ public abstract class EdsContainerBase implements Closeable
 			if(ExFat.isModuleIncompatible())
 				throw new UserException("Please update the exFAT module.", R.string.update_exfat_module);
 			throw new UserException("Please install the exFAT module", R.string.exfat_module_required);
+		}
+
+		if(Ext4FS.isExt4Image(io))
+		{
+			// ext2/3/4 support is read-only for now, regardless of isReadOnly.
+			if(!Ext4FS.isModuleInstalled())
+				throw new IOException("ext4 native module failed to load");
+			return new Ext4FS(io);
 		}
 
 		FatFS fs = FatFS.getFat(io);
@@ -265,19 +274,32 @@ public abstract class EdsContainerBase implements Closeable
 		if(_messageDigest!=null)
 			vl.setHashFunc(_messageDigest);
 		
-		vl.setPassword(cutPassword(password, cf.getMaxPasswordLength()));
 		if(cf.hasCustomKDFIterationsSupport() && _numKDFIterations > 0)
 			vl.setNumKDFIterations(_numKDFIterations);
-		if(vl.readHeader(containerFile))
-		{			
-			_containerFormat = cf;
-			_layout = vl;			
-			return true;
+		// Full-length password first; then, for formats whose limit grew over time
+		// (VeraCrypt: 64 -> 128 bytes in 1.24), the legacy truncated form that older
+		// EDS versions silently used.
+		int legacyLen = cf.getLegacyMaxPasswordLength();
+		int[] lengths = legacyLen > 0 && password != null && password.length > legacyLen ?
+				new int[]{cf.getMaxPasswordLength(), legacyLen} :
+				new int[]{cf.getMaxPasswordLength()};
+		for(int len: lengths)
+		{
+			vl.setPassword(cutPassword(password, len));
+			if(vl.readHeader(containerFile))
+			{
+				if(len == legacyLen)
+					Logger.log("Opened using a legacy 64-byte truncated password. Consider changing the password.");
+				_containerFormat = cf;
+				_layout = vl;
+				return true;
+			}
 		}
-		else if(isHidden && (_encryptionEngine!=null || _messageDigest!=null))
+		if(isHidden && (_encryptionEngine!=null || _messageDigest!=null))
 		{
 			vl.setEngine(null);
 			vl.setHashFunc(null);
+			vl.setPassword(cutPassword(password, cf.getMaxPasswordLength()));
 			if(vl.readHeader(containerFile))
 			{
 				_containerFormat = cf;

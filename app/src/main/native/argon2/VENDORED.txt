@@ -1,0 +1,1 @@
+Argon2 reference implementation from https://github.com/P-H-C/phc-winner-argon2 commit f57e61e (CC0 / Apache-2.0). Unmodified; portable ref.c only.

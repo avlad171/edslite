@@ -172,7 +172,8 @@ public class DefaultSettingsCommon implements SettingsCommon
 	@Override
 	public boolean isFlagSecureEnabled()
 	{
-		return false;
+		// Secure by default: no screenshots / recents thumbnails of decrypted content.
+		return true;
 	}
 
 	@Override

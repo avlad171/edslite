@@ -14,6 +14,8 @@ public interface ContainerFormatInfo
 	boolean hasKeyfilesSupport();
 	boolean hasCustomKDFIterationsSupport();
 	int getMaxPasswordLength();
+	/** A shorter limit older versions truncated passwords to, tried as a fallback; 0 if none. */
+	default int getLegacyMaxPasswordLength() { return 0; }
 	VolumeLayout getHiddenVolumeLayout();
 	void formatContainer(RandomAccessIO io, VolumeLayout layout, FileSystemInfo fsInfo) throws IOException, ApplicationException;
 	int getOpeningPriority();

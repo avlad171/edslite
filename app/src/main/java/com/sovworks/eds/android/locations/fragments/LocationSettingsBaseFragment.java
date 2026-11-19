@@ -82,14 +82,16 @@ public abstract class LocationSettingsBaseFragment extends PropertiesFragmentBas
     @Override
     public boolean onOptionsItemSelected(MenuItem menuItem)
     {
-        switch (menuItem.getItemId())
+        final int id = menuItem.getItemId();
+        if (id == R.id.confirm)
         {
-            case R.id.confirm:
-                addNewLocation();
-                getActivity().finish();
-                return true;
-            default:
-                return super.onOptionsItemSelected(menuItem);
+            addNewLocation();
+            getActivity().finish();
+            return true;
+        }
+        else
+        {
+            return super.onOptionsItemSelected(menuItem);
         }
     }
 

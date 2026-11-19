@@ -1,0 +1,2 @@
+lwext4 vendored from https://github.com/gkostka/lwext4 commit eaea5a53f141c4386535a6a3a6e00bbad2008c91 (GPLv2). Unmodified.
+Patched (see EDS-PATCHES.txt).

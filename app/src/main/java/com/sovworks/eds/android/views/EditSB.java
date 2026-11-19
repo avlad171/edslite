@@ -1,7 +1,7 @@
 package com.sovworks.eds.android.views;
 
 import android.content.Context;
-import android.support.v7.widget.AppCompatEditText;
+import androidx.appcompat.widget.AppCompatEditText;
 import android.text.Editable;
 import android.util.AttributeSet;
 
@@ -26,6 +26,25 @@ public class EditSB extends AppCompatEditText
     {
         super(context, attrs, defStyleAttr);
         setSaveEnabled(false);
+        hardenSecretInput();
+    }
+
+    /**
+     * Secret-entry hardening (ported from nevercrypt / 0sakaCrypt, adapted):
+     * - keyboard must not learn/suggest from what is typed (incognito IME);
+     * - autofill services must not see or save it;
+     * - on Android 14+ only real accessibility tools (e.g. TalkBack) can read it,
+     *   other accessibility services (a common malware vector) cannot. This keeps
+     *   the field usable for blind users, unlike importantForAccessibility="no".
+     */
+    private void hardenSecretInput()
+    {
+        setImeOptions(getImeOptions() | android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+        setImportantForAutofill(IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        if (android.os.Build.VERSION.SDK_INT >= 34)
+            setAccessibilityDataSensitive(ACCESSIBILITY_DATA_SENSITIVE_YES);
+        setLongClickable(false); // no copy/share of the secret via the selection toolbar
+        setTextIsSelectable(false);
     }
 
     @Override

@@ -3,7 +3,7 @@ package com.sovworks.eds.android.service;
 
 import android.content.Context;
 import android.content.Intent;
-import android.support.v4.app.NotificationCompat;
+import androidx.core.app.NotificationCompat;
 
 import com.sovworks.eds.android.R;
 import com.sovworks.eds.fs.util.FilesOperationStatus;
@@ -145,7 +145,7 @@ public abstract class FileOperationTaskBase extends	ServiceTaskWithNotificationB
 	
 	private void broadcastCompleted()
 	{
-		_context.sendBroadcast(new Intent(FileOpsService.BROADCAST_FILE_OPERATION_COMPLETED));
+		_context.sendBroadcast(new Intent(FileOpsService.BROADCAST_FILE_OPERATION_COMPLETED).setPackage(_context.getPackageName()));
 	}	
 	
 	protected FileOperationParam getParam()

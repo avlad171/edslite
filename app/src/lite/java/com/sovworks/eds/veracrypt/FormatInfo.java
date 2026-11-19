@@ -26,6 +26,20 @@ public class FormatInfo extends com.sovworks.eds.truecrypt.FormatInfo
 		return 3;
 	}
 
+	/** VeraCrypt 1.24+ accepts 128-byte (UTF-8) passwords for non-system volumes. */
+	@Override
+	public int getMaxPasswordLength()
+	{
+		return 128;
+	}
+
+	/** Earlier VeraCrypt and EDS versions used at most 64 bytes. */
+	@Override
+	public int getLegacyMaxPasswordLength()
+	{
+		return 64;
+	}
+
 	@Override
 	public boolean hasCustomKDFIterationsSupport()
 	{

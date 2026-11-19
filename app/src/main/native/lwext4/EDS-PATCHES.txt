@@ -1,0 +1,6 @@
+1. metadata_csum_seed (INCOMPAT 0x2000): named s_prj_quota_inum/s_checksum_seed in
+   struct ext4_sblock (ext4_types.h), added ext4_sb_csum_seed() (ext4_super.h), used it for
+   all metadata checksum seeds, and added EXT4_FINCOM_CSUM_SEED to EXT4_SUPPORTED_FINCOM.
+2. ext4_fread (src/ext4.c): the aligned multi-block loop read holes (fblock==0) as
+   physical block 0, returning metadata instead of zeros for sparse files (data leak /
+   corruption). Rewritten to read contiguous runs and zero-fill holes. Same fix for the trailing partial block.

@@ -28,10 +28,15 @@ public class ProgressDialog extends DialogFragment
 		return d;
 	}
 
+	/** progress < 0: unknown duration, show an indeterminate (animated) bar. */
 	public void setProgress(int progress)
 	{
 		if(_progressBar!=null)
-			_progressBar.setProgress(progress);
+		{
+			_progressBar.setIndeterminate(progress < 0);
+			if(progress >= 0)
+				_progressBar.setProgress(progress);
+		}
 	}
 
 	public void setTitle(CharSequence title)

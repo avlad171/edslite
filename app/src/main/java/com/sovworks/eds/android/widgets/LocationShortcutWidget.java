@@ -7,7 +7,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.widget.RemoteViews;
 
 import com.sovworks.eds.android.R;
@@ -31,7 +31,7 @@ public class LocationShortcutWidget extends AppWidgetProvider
 		
 		Intent intent = new Intent(context, FileManagerActivity.class);
 		intent.setData(Uri.parse(prefs.locationUriString));				
-        PendingIntent pendingIntent = PendingIntent.getActivity(context, widgetId, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pendingIntent = PendingIntent.getActivity(context, widgetId, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         views.setOnClickPendingIntent(R.id.widgetLockImageButton, pendingIntent);
 		appWidgetManager.updateAppWidget(widgetId, views);
 	}

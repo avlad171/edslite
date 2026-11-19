@@ -1,5 +1,7 @@
 package com.sovworks.eds.android.locations.fragments;
 
+import androidx.core.content.ContextCompat;
+
 import android.annotation.SuppressLint;
 import android.app.ListFragment;
 import android.content.BroadcastReceiver;
@@ -8,7 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.LayoutInflater;
@@ -154,9 +156,9 @@ public abstract class LocationListBaseFragment extends ListFragment
     public void onResume()
     {
         super.onResume();
-        getActivity().registerReceiver(_reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED));
-        getActivity().registerReceiver(_reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_REMOVED));
-        getActivity().registerReceiver(_reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CREATED));
+        ContextCompat.registerReceiver(getActivity(), _reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(getActivity(), _reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_REMOVED), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(getActivity(), _reloadLocationsReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CREATED), ContextCompat.RECEIVER_NOT_EXPORTED);
         loadLocations();
     }
 
@@ -276,25 +278,33 @@ public abstract class LocationListBaseFragment extends ListFragment
 
     protected boolean handleMenu(MenuHandlerInfo mhi)
     {
-        switch (mhi.menuItemId)
+        final int id = mhi.menuItemId;
+        if (id == R.id.add)
         {
-            case R.id.add:
-                addNewLocation(getDefaultLocationType());
-                return true;
-            case R.id.settings:
-                openSelectedLocationSettings();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.remove:
-                removeSelectedLocation();
-                mhi.clearSelection = true;
-                return true;
-            case R.id.close:
-                closeSelectedLocation();
-                mhi.clearSelection = true;
-                return true;
-            default:
-                return false;
+            addNewLocation(getDefaultLocationType());
+            return true;
+        }
+        else if (id == R.id.settings)
+        {
+            openSelectedLocationSettings();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.remove)
+        {
+            removeSelectedLocation();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else if (id == R.id.close)
+        {
+            closeSelectedLocation();
+            mhi.clearSelection = true;
+            return true;
+        }
+        else
+        {
+            return false;
         }
     }
 

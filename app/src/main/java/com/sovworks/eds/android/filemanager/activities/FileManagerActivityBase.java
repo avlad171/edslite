@@ -1,5 +1,7 @@
 package com.sovworks.eds.android.filemanager.activities;
 
+import androidx.core.content.ContextCompat;
+
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Fragment;
@@ -13,8 +15,8 @@ import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.content.LocalBroadcastManager;
+import androidx.annotation.NonNull;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
@@ -46,8 +48,8 @@ import com.sovworks.eds.locations.Location;
 import com.sovworks.eds.locations.LocationsManager;
 import com.sovworks.eds.locations.Openable;
 import com.sovworks.eds.settings.GlobalConfig;
-import com.trello.rxlifecycle2.android.ActivityEvent;
-import com.trello.rxlifecycle2.components.RxActivity;
+import com.trello.rxlifecycle3.android.ActivityEvent;
+import com.trello.rxlifecycle3.components.RxActivity;
 
 import java.util.NavigableSet;
 import java.util.TreeSet;
@@ -328,10 +330,10 @@ public abstract class FileManagerActivityBase extends RxActivity implements Prev
                 panel.setVisibility(View.GONE);
         }
 	    LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(_exitBroadcastReceiver, new IntentFilter(EdsApplication.BROADCAST_EXIT));
-        registerReceiver(_locationAddedOrRemovedReceiver, LocationsManager.getLocationAddedIntentFilter());
-        registerReceiver(_locationAddedOrRemovedReceiver, LocationsManager.getLocationRemovedIntentFilter());
-        registerReceiver(_locationChangedReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED));
-        registerReceiver(_locationAddedOrRemovedReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED));
+        ContextCompat.registerReceiver(this, _locationAddedOrRemovedReceiver, LocationsManager.getLocationAddedIntentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(this, _locationAddedOrRemovedReceiver, LocationsManager.getLocationRemovedIntentFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(this, _locationChangedReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(this, _locationAddedOrRemovedReceiver, new IntentFilter(LocationsManager.BROADCAST_LOCATION_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED);
 
         _drawer.init(savedInstanceState);
         AppInitHelper.
@@ -504,9 +506,9 @@ public abstract class FileManagerActivityBase extends RxActivity implements Prev
         super.onStart();
         checkIfCurrentLocationIsStillOpen();
         getDrawerController().updateMenuItemViews();
-        registerReceiver(_updatePathReceiver, new IntentFilter(
-                FileOpsService.BROADCAST_FILE_OPERATION_COMPLETED));
-        registerReceiver(_closeAllReceiver, new IntentFilter(LocationsManager.BROADCAST_CLOSE_ALL));
+        ContextCompat.registerReceiver(this, _updatePathReceiver, new IntentFilter(
+                FileOpsService.BROADCAST_FILE_OPERATION_COMPLETED), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(this, _closeAllReceiver, new IntentFilter(LocationsManager.BROADCAST_CLOSE_ALL), ContextCompat.RECEIVER_NOT_EXPORTED);
         Logger.debug("FileManagerActivity has started");
     }
 

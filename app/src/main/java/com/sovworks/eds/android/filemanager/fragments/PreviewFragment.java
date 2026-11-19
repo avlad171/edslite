@@ -30,7 +30,7 @@ import com.sovworks.eds.fs.Path;
 import com.sovworks.eds.fs.util.StringPathUtil;
 import com.sovworks.eds.locations.Location;
 import com.sovworks.eds.settings.GlobalConfig;
-import com.trello.rxlifecycle2.components.RxFragment;
+import com.trello.rxlifecycle3.components.RxFragment;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -294,32 +294,46 @@ public class PreviewFragment extends RxFragment implements FileManagerFragment
 	{
 		try
 		{
-			switch (menuItem.getItemId())
+			final int id = menuItem.getItemId();
+			if (id == R.id.prevMenuItem)
 			{
-			case R.id.prevMenuItem:
-				moveLeft();
-				return true;
-			case R.id.nextMenuItem:
-				moveRight();
-				return true;		
-			case R.id.zoomInMenuItem:
-				_mainImageView.zoomIn();
-				return true;
-			case R.id.zoomOutMenuItem:
-				_mainImageView.zoomOut();
-				return true;
-			case R.id.rotateLeftMenuItem:
-				_mainImageView.rotateLeft();
-				return true;
-			case R.id.rotateRightMenuItem:
-				_mainImageView.rotateRight();
-				return true;
-			case R.id.toggleAutoZoom:
-				toggleAutoZoom();
-				return true;
-			case R.id.fullScreenModeMenuItem:
-				toggleFullScreen();
-				return true;
+			    moveLeft();
+			    return true;
+			}
+			else if (id == R.id.nextMenuItem)
+			{
+			    moveRight();
+			    return true;
+			}
+			else if (id == R.id.zoomInMenuItem)
+			{
+			    _mainImageView.zoomIn();
+			    return true;
+			}
+			else if (id == R.id.zoomOutMenuItem)
+			{
+			    _mainImageView.zoomOut();
+			    return true;
+			}
+			else if (id == R.id.rotateLeftMenuItem)
+			{
+			    _mainImageView.rotateLeft();
+			    return true;
+			}
+			else if (id == R.id.rotateRightMenuItem)
+			{
+			    _mainImageView.rotateRight();
+			    return true;
+			}
+			else if (id == R.id.toggleAutoZoom)
+			{
+			    toggleAutoZoom();
+			    return true;
+			}
+			else if (id == R.id.fullScreenModeMenuItem)
+			{
+			    toggleFullScreen();
+			    return true;
 			}
 		}
 		catch (Exception e)

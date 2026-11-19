@@ -9,7 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.PowerManager;
-import android.support.v4.content.LocalBroadcastManager;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.sovworks.eds.android.EdsApplication;
 import com.sovworks.eds.android.Logger;
@@ -154,7 +154,7 @@ public abstract class FileOpsServiceBase extends IntentService
 		Intent i = new Intent(context, FileOpsService.class);
 		i.setAction(ACTION_CANCEL_TASK);
 		i.putExtra(INTENT_PARAM_TASK_ID, taskId);
-		return PendingIntent.getService(context, taskId, i, PendingIntent.FLAG_ONE_SHOT);
+		return PendingIntent.getService(context, taskId, i, PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
 	}
 
 	public static void startFileViewer(Context context, Location fileLocation)

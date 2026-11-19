@@ -2,6 +2,7 @@
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
 
+#include <unistd.h>
 #include "com_sovworks_eds_fs_util_FDRandomAccessIO.h"
 
 #include <stdlib.h>

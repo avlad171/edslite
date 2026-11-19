@@ -6,7 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.widget.RemoteViews;
 
 import com.sovworks.eds.android.R;
@@ -37,7 +37,7 @@ public class CloseAllContainersWidget extends AppWidgetProvider
 			i.setAction(Intent.ACTION_MAIN);
 		}
 			
-		PendingIntent pendingIntent= PendingIntent.getActivity(context, widgetId, i,PendingIntent.FLAG_UPDATE_CURRENT);		
+		PendingIntent pendingIntent= PendingIntent.getActivity(context, widgetId, i,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);		
 		views.setOnClickPendingIntent(R.id.containersClosedImageButton, pendingIntent);      
 		appWidgetManager.updateAppWidget(widgetId, views);
 	}
