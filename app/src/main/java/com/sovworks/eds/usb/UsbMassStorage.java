@@ -73,6 +73,8 @@ public final class UsbMassStorage implements Luks2Header.Source, Closeable
     private long blockCount;
     private byte[] tmp;
     private boolean closed;
+    /** Set once the device is known to be unplugged: every later read fails at once. */
+    private volatile boolean gone;
 
     // Statistics, for diagnostics.
     public long commands, resets, retries;
@@ -197,6 +199,8 @@ public final class UsbMassStorage implements Luks2Header.Source, Closeable
     {
         if (closed)
             throw new IOException("device closed");
+        if (gone)
+            throw new IOException("USB device was disconnected");
         if (len < 0 || bufOff < 0 || bufOff + len > buf.length)
             throw new IndexOutOfBoundsException();
         if (off < 0 || off > size() - len)
@@ -260,6 +264,21 @@ public final class UsbMassStorage implements Luks2Header.Source, Closeable
      * Throws ScsiException on CHECK CONDITION that retrying doesn't fix.
      */
     private int execute(String what, byte[] cdb, byte[] data, int dataOff, int len, boolean idempotent)
+            throws IOException
+    {
+        try
+        {
+            return executeOnce(what, cdb, data, dataOff, len, idempotent);
+        }
+        catch (IOException e)
+        {
+            if (!pipe.isConnected())
+                gone = true;
+            throw e;
+        }
+    }
+
+    private int executeOnce(String what, byte[] cdb, byte[] data, int dataOff, int len, boolean idempotent)
             throws IOException
     {
         IOException last = null;

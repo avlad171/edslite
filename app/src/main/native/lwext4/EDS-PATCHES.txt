@@ -4,3 +4,7 @@
 2. ext4_fread (src/ext4.c): the aligned multi-block loop read holes (fblock==0) as
    physical block 0, returning metadata instead of zeros for sparse files (data leak /
    corruption). Rewritten to read contiguous runs and zero-fill holes. Same fix for the trailing partial block.
+3. ext4_generic_open2 (src/ext4.c): on an I/O error while walking a path, the error exit
+   released the current inode reference a second time after a failed put/get, tripping the
+   assertion in ext4_bcache_free (crash when a USB drive is unplugged mid-lookup). Fixed by
+   tracking whether the reference is held. Covered by misc/ext4-test I/O error injection.

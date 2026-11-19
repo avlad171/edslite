@@ -64,7 +64,7 @@ public class UsbDriveLocation extends LocationBase
         }
     }
 
-    public String getProduct() { return nz(_uri.getQueryParameter("product")); }
+    public String getProduct() { return nz(_uri.getQueryParameter("product")).trim(); }
 
     @Override
     public String getTitle()

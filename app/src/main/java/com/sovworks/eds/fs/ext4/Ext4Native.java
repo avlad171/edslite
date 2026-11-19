@@ -22,6 +22,8 @@ final class Ext4Native
     static native int stat(long vol, String path, long[] out);
     /** Adds raw UTF-8 names (byte[]) to names; @return 0 or errno */
     static native int list(long vol, String path, Collection<byte[]> names);
+    /** Like list, plus {type, size, mtimeSeconds} per name (one inode read each, no lookups). */
+    static native int listStat(long vol, String path, Collection<byte[]> names, Collection<long[]> stats);
     /** @return file handle (&gt;0) or -errno */
     static native long open(long vol, String path);
     /** @return bytes read, 0 at EOF, or -errno */

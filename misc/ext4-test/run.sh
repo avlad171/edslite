@@ -78,6 +78,23 @@ for opts in "-t ext4" "-t ext4 -b 1024" "-t ext4 -O ^metadata_csum,^64bit" "-t e
   "$OUT/ext4walk" "$img" check < "$OUT/checks" > "$OUT/checks.got" 2>"$OUT/err"
   if diff -q "$OUT/checks.got" "$OUT/checks.expected" >/dev/null; then echo "OK   [$opts] symlinks ($(grep -c . $OUT/checks) cases)"; else echo "FAIL [$opts] symlinks"; diff "$OUT/checks.got" "$OUT/checks.expected" | head -20; fail=1; fi
 done
+# I/O errors at every point (USB drive unplugged mid-operation): every run must end cleanly, with
+# no crash, assertion or sanitizer report. Both a full walk (stops at the first error) and the
+# check list (keeps going after errors, like the file manager) are run for each failure point.
+for opts in "-t ext4" "-t ext2"; do
+  img="$OUT/fimg"; rm -f "$img"; $MKE2FS -q -F $opts -d "$OUT/src" "$img" 64M
+  R=$("$OUT/ext4walk" "$img" 2>&1 >/dev/null | sed -n 's/^reads=//p'); STEP=$(( R / 300 + 1 )); bad=0; runs=0
+  n=0; while [ $n -le $R ]; do
+    for mode in walk check; do
+      runs=$((runs+1))
+      if [ $mode = check ]; then EDSEXT4_FAIL_AFTER=$n ASAN_OPTIONS=exitcode=99 "$OUT/ext4walk" "$img" check < "$OUT/checks" >/dev/null 2>"$OUT/ferr"; rc=$?
+      else EDSEXT4_FAIL_AFTER=$n ASAN_OPTIONS=exitcode=99 "$OUT/ext4walk" "$img" >/dev/null 2>"$OUT/ferr"; rc=$?; fi
+      if [ $rc -ne 0 ]; then bad=$((bad+1)); [ $bad -le 3 ] && { echo "  crash at read $n ($mode, rc=$rc):"; grep -E "Assertion|assert|ERROR: AddressSanitizer|runtime error|SUMMARY" "$OUT/ferr" | head -3; }; fi
+    done
+    n=$((n+STEP))
+  done
+  if [ $bad -eq 0 ]; then echo "OK   [$opts] I/O error injection: $runs runs over $R reads, no crashes"; else echo "FAIL [$opts] I/O error injection: $bad of $runs runs crashed"; fail=1; fi
+done
 # Must never write: image hash unchanged after walk
 shasum "$img" > "$OUT/h1"; "$OUT/ext4walk" "$img" >/dev/null 2>&1; shasum "$img" | diff -q - "$OUT/h1" >/dev/null && echo "OK   image unmodified" || { echo "FAIL image modified"; fail=1; }
 exit $fail

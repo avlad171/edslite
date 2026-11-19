@@ -78,7 +78,10 @@ public abstract class ExecutableFileRecordBase extends FileRecord
 	{
 		Uri devUri = location.getDeviceAccessibleUri(rec.getPath());
 		if(devUri != null)
-			FileOpsService.startFileViewer(_host, devUri, FileOpsService.getMimeTypeFromExtension(_context,new StringPathUtil(rec.getName()).getFileExtension()));
+		{
+			// e.g. extensionless text files like /etc/os-release open as text/plain
+			FileOpsService.startFileViewer(_host, devUri, FileOpsService.getMimeTypeGuess(_context, rec.getPath()));
+		}
         else
             extractFileAndStartViewer(location, rec);
 	}

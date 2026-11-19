@@ -43,10 +43,11 @@ void edsext4_umount(edsext4_vol *v);
  * confined to the volume (absolute targets start at its root, ".." stops there; ELOOP after 40). */
 int edsext4_stat_path(edsext4_vol *v, const char *path, edsext4_stat *st);
 
-/* Calls cb for each regular file / directory in the directory (skips ".", "..", special files,
- * broken links and loops; links come last, typed as their target | EDSEXT4_F_SYMLINK).
+/* Calls cb for each regular file / directory in the directory with its stat (skips ".", "..",
+ * special files, broken links and loops; links carry their target's stat, type |
+ * EDSEXT4_F_SYMLINK). One inode read per entry, no path lookups.
  * Stops and returns cb's value if it is non-zero. */
-typedef int (*edsext4_dirent_cb)(void *ctx, const char *name, size_t name_len, int type);
+typedef int (*edsext4_dirent_cb)(void *ctx, const char *name, size_t name_len, const edsext4_stat *st);
 int edsext4_list(edsext4_vol *v, const char *path, edsext4_dirent_cb cb, void *ctx);
 
 edsext4_file *edsext4_open(edsext4_vol *v, const char *path, int *err);

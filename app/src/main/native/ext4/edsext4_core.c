@@ -22,6 +22,8 @@
 
 #include "ext4.h"
 #include "ext4_blockdev.h"
+#include <stddef.h>
+#include "ext4_fs.h"
 #include "ext4_inode.h"
 #include "ext4_super.h"
 
@@ -302,67 +304,87 @@ int edsext4_stat_path(edsext4_vol *v, const char *path, edsext4_stat *st)
 	return r;
 }
 
+/* The lwext4 fs behind a mount point (ext4_sblock is embedded in struct ext4_fs). */
+static struct ext4_fs *vol_fs(const edsext4_vol *v)
+{
+	struct ext4_sblock *sb = NULL;
+	if (ext4_get_sblock(v->mp, &sb) != EOK || !sb)
+		return NULL;
+	return (struct ext4_fs *)((char *)sb - offsetof(struct ext4_fs, sb));
+}
+
+typedef struct { char *name; uint32_t ino; } dent;
+
 int edsext4_list(edsext4_vol *v, const char *path, edsext4_dirent_cb cb, void *ctx)
 {
 	char p[PATH_MAX_LEN];
 	ext4_dir d;
-	char **links = NULL;
-	size_t nlinks = 0, cap = 0;
+	dent *ents = NULL;
+	size_t n = 0, cap = 0;
 	pthread_mutex_lock(&g_lock);
-	int r = resolved_full_path(v, path, p, sizeof(p));
+	struct ext4_fs *fs = vol_fs(v);
+	int r = fs ? resolved_full_path(v, path, p, sizeof(p)) : EIO;
 	if (r == EOK)
 		r = ext4_dir_open(&d, p);
 	if (r != EOK) {
 		pthread_mutex_unlock(&g_lock);
 		return r;
 	}
+	/* Pass 1: names and inode numbers (no other lookups while the directory is open). */
 	const ext4_direntry *de;
 	while ((de = ext4_dir_entry_next(&d)) != NULL) {
 		size_t nl = de->name_length;
 		if ((nl == 1 && de->name[0] == '.') ||
 		    (nl == 2 && de->name[0] == '.' && de->name[1] == '.'))
 			continue;
-		if (de->inode_type == EXT4_DE_SYMLINK) {
-			/* resolved after the directory is closed (no nested lookups mid-iteration) */
-			if (nlinks == cap) {
-				size_t nc = cap ? cap * 2 : 16;
-				char **nl2 = realloc(links, nc * sizeof(char *));
-				if (!nl2) { r = ENOMEM; break; }
-				links = nl2;
-				cap = nc;
-			}
-			char *nm = malloc(nl + 1);
-			if (!nm) { r = ENOMEM; break; }
-			memcpy(nm, de->name, nl);
-			nm[nl] = 0;
-			links[nlinks++] = nm;
-			continue;
+		if (n == cap) {
+			size_t nc = cap ? cap * 2 : 64;
+			dent *ne = realloc(ents, nc * sizeof(dent));
+			if (!ne) { r = ENOMEM; break; }
+			ents = ne;
+			cap = nc;
 		}
-		int t;
-		if (de->inode_type == EXT4_DE_DIR)
-			t = EDSEXT4_T_DIR;
-		else if (de->inode_type == EXT4_DE_REG_FILE)
-			t = EDSEXT4_T_FILE;
-		else
-			continue; /* devices, fifos, sockets: not exposed */
-		r = cb(ctx, (const char *)de->name, nl, t);
-		if (r != 0)
-			break;
+		char *nm = malloc(nl + 1);
+		if (!nm) { r = ENOMEM; break; }
+		memcpy(nm, de->name, nl);
+		nm[nl] = 0;
+		ents[n].name = nm;
+		ents[n].ino = de->inode;
+		n++;
 	}
 	ext4_dir_close(&d);
-	/* Symlinks are listed with their target's type; broken links, loops and links to special
-	 * files are left out. */
-	for (size_t i = 0; i < nlinks; i++) {
+
+	/* Pass 2: type/size/mtime straight from each inode (one inode read, no path lookups).
+	 * Symlinks are followed (typed as their target | EDSEXT4_F_SYMLINK); broken links,
+	 * loops and special files are left out. */
+	for (size_t i = 0; i < n; i++) {
 		if (r == 0) {
-			char lp[PATH_MAX_LEN];
-			int k = snprintf(lp, sizeof(lp), "%s/%s", path, links[i]);
-			edsext4_stat st;
-			if (k > 0 && (size_t)k < sizeof(lp) && stat_locked(v, lp, &st) == EOK && st.type != EDSEXT4_T_OTHER)
-				r = cb(ctx, links[i], strlen(links[i]), st.type | EDSEXT4_F_SYMLINK);
+			struct ext4_inode_ref ref;
+			int gr = ext4_fs_get_inode_ref(fs, ents[i].ino, &ref);
+			if (gr != EOK)
+				r = gr; /* I/O error (e.g. drive unplugged): stop, don't grind through the rest */
+			else {
+				uint32_t mode = ext4_inode_get_mode(&fs->sb, ref.inode) & 0xF000;
+				edsext4_stat st;
+				st.type = mode == EXT4_INODE_MODE_DIRECTORY ? EDSEXT4_T_DIR
+					: mode == EXT4_INODE_MODE_FILE ? EDSEXT4_T_FILE : EDSEXT4_T_OTHER;
+				st.size = ext4_inode_get_size(&fs->sb, ref.inode);
+				st.mtime = (int64_t)ext4_inode_get_modif_time(ref.inode);
+				ext4_fs_put_inode_ref(&ref);
+				if (mode == EXT4_INODE_MODE_SOFTLINK) {
+					char lp[PATH_MAX_LEN];
+					int k = snprintf(lp, sizeof(lp), "%s/%s", path, ents[i].name);
+					if (k > 0 && (size_t)k < sizeof(lp) && stat_locked(v, lp, &st) == EOK && st.type != EDSEXT4_T_OTHER) {
+						st.type |= EDSEXT4_F_SYMLINK;
+						r = cb(ctx, ents[i].name, strlen(ents[i].name), &st);
+					}
+				} else if (st.type != EDSEXT4_T_OTHER)
+					r = cb(ctx, ents[i].name, strlen(ents[i].name), &st);
+			}
 		}
-		free(links[i]);
+		free(ents[i].name);
 	}
-	free(links);
+	free(ents);
 	pthread_mutex_unlock(&g_lock);
 	return r;
 }

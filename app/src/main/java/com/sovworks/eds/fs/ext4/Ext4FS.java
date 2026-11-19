@@ -165,8 +165,16 @@ public class Ext4FS implements FileSystem
     {
         Ext4Path(Ext4FS fs, String pathString)
         {
+            this(fs, pathString, null);
+        }
+
+        /** stat: {type, size, mtime} delivered with a directory listing, or null. The volume is
+         *  read-only and exclusively ours while mounted, so it can't go stale. */
+        Ext4Path(Ext4FS fs, String pathString, long[] stat)
+        {
             super(fs);
             _pathString = pathString;
+            _stat = stat;
         }
 
         @Override public String getPathString() { return _pathString; }
@@ -192,7 +200,13 @@ public class Ext4FS implements FileSystem
 
         long[] stat() throws IOException
         {
-            return getFileSystem().stat(_pathString);
+            long[] s = _stat;
+            if (s == null)
+            {
+                s = getFileSystem().stat(_pathString);
+                _stat = s; // null (doesn't exist) is not cached
+            }
+            return s;
         }
 
         long[] statOrThrow() throws IOException
@@ -204,6 +218,7 @@ public class Ext4FS implements FileSystem
         }
 
         private final String _pathString;
+        private volatile long[] _stat;
     }
 
     // ---------------------------------------------------------------- records
@@ -235,13 +250,19 @@ public class Ext4FS implements FileSystem
         {
             Ext4FS fs = _path.getFileSystem();
             ArrayList<byte[]> raw = new ArrayList<>();
-            int r = fs.withVol(v -> Ext4Native.list(v, _path.getPathString(), raw));
+            ArrayList<long[]> stats = new ArrayList<>();
+            long t0 = System.nanoTime();
+            int r = fs.withVol(v -> Ext4Native.listStat(v, _path.getPathString(), raw, stats));
+            com.sovworks.eds.android.Logger.debug(String.format("Ext4FS: listed %d entries of '%s' in %d ms (r=%d)",
+                    raw.size(), _path.getPathString(), (System.nanoTime() - t0) / 1000000, r));
             if (r != 0)
                 throw new IOException(describe("readdir failed for " + _path.getPathString(), r));
+            if (stats.size() != raw.size())
+                throw new IOException("readdir returned inconsistent results for " + _path.getPathString());
             final ArrayList<Path> paths = new ArrayList<>(raw.size());
             StringPathUtil cur = _path.getPathUtil();
-            for (byte[] n : raw)
-                paths.add(new Ext4Path(fs, cur.combine(new String(n, StandardCharsets.UTF_8)).toString()));
+            for (int i = 0; i < raw.size(); i++)
+                paths.add(new Ext4Path(fs, cur.combine(new String(raw.get(i), StandardCharsets.UTF_8)).toString(), stats.get(i)));
             return new Contents()
             {
                 @Override public void close() {}

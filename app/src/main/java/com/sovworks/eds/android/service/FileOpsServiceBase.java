@@ -118,6 +118,40 @@ public abstract class FileOpsServiceBase extends IntentService
 		return getMimeTypeFromExtension(context, path.getFile());
 	}
 
+	/**
+	 * MIME type from the extension; if that's unknown, "text/plain" when the first 4 KB look like
+	 * text (no NUL bytes, valid UTF-8). For single files only (reads up to 4 KB of the file).
+	 */
+	public static String getMimeTypeGuess(Context context, Path path) throws IOException
+	{
+		String mime = getMimeTypeFromExtension(context, path);
+		return "application/octet-stream".equals(mime) && looksLikeText(path.getFile()) ? "text/plain" : mime;
+	}
+
+	static boolean looksLikeText(com.sovworks.eds.fs.File file)
+	{
+		byte[] buf = new byte[4096];
+		int n = 0;
+		try (java.io.InputStream in = file.getInputStream())
+		{
+			int r;
+			while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0)
+				n += r;
+		}
+		catch (Exception e)
+		{
+			return false;
+		}
+		for (int i = 0; i < n; i++)
+			if (buf[i] == 0)
+				return false;
+		java.nio.charset.CharsetDecoder dec = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+				.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+				.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+		// endOfInput=false: a multi-byte character cut off at the 4 KB boundary is fine
+		return !dec.decode(java.nio.ByteBuffer.wrap(buf, 0, n), java.nio.CharBuffer.allocate(n), false).isError();
+	}
+
 	public static String getMimeTypeFromExtension(Context context, com.sovworks.eds.fs.File file) throws IOException
 	{
         return getMimeTypeFromExtension(context, new StringPathUtil(file.getName()).getFileExtension());

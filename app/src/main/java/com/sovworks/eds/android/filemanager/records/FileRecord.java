@@ -7,7 +7,6 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.text.format.Formatter;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.View;
@@ -186,10 +185,7 @@ class FileRecord extends FsBrowserRecord
 
     protected void appendSizeInfo(Context context, StringBuilder sb)
     {
-        sb.append(String.format("%s: %s",
-                context.getText(R.string.size),
-                Formatter.formatFileSize(context, getSize())
-        ));
+        sb.append(context.getText(R.string.size)).append(": ").append(formatSize(getSize()));
     }
 
     protected void appendModDataInfo(Context context, StringBuilder sb)
@@ -197,15 +193,51 @@ class FileRecord extends FsBrowserRecord
         Date md = getModificationDate();
         if(md!=null)
         {
-            java.text.DateFormat df = android.text.format.DateFormat.getDateFormat(context);
-            java.text.DateFormat tf = android.text.format.DateFormat.getTimeFormat(context);
-            sb.append(String.format(" %s: %s %s",
-                    context.getText(R.string.last_modified),
-                    df.format(md),
-                    tf.format(md)
-            ));
+            java.text.DateFormat[] f = dateTimeFormats(context);
+            sb.append(' ').append(context.getText(R.string.last_modified)).append(": ")
+                    .append(f[0].format(md)).append(' ').append(f[1].format(md));
         }
     }
+
+    /*
+     * Formatting the info line used to dominate directory loading (80% of the time for a
+     * 1500-entry folder): android.text.format.Formatter.formatFileSize builds ICU number
+     * formatters on every call, and DateFormat.getDate/TimeFormat create new formatters too.
+     */
+
+    /** Like Formatter.formatFileSize (SI units, as on Android 8+), without per-call ICU setup. */
+    static String formatSize(long bytes)
+    {
+        // Same thresholds as Formatter: next unit above 900, 2 decimals below 100, else none.
+        String[] units = {"B", "kB", "MB", "GB", "TB", "PB"};
+        double v = bytes;
+        int u = 0;
+        while (v > 900 && u < units.length - 1)
+        {
+            v /= 1000;
+            u++;
+        }
+        if (u == 0)
+            return bytes + " B";
+        return String.format(java.util.Locale.getDefault(), v < 100 ? "%.2f %s" : "%.0f %s", v, units[u]);
+    }
+
+    /** {date format, time format}, created once per thread and per locale / 12-24h setting. */
+    private static java.text.DateFormat[] dateTimeFormats(Context context)
+    {
+        String key = java.util.Locale.getDefault().toLanguageTag() + "|" + android.text.format.DateFormat.is24HourFormat(context);
+        Object[] cached = DATE_FORMATS.get();
+        if (cached == null || !key.equals(cached[0]))
+        {
+            cached = new Object[]{key, new java.text.DateFormat[]{
+                    android.text.format.DateFormat.getDateFormat(context),
+                    android.text.format.DateFormat.getTimeFormat(context)}};
+            DATE_FORMATS.set(cached);
+        }
+        return (java.text.DateFormat[]) cached[1];
+    }
+
+    private static final ThreadLocal<Object[]> DATE_FORMATS = new ThreadLocal<>();
 
     protected void initExtFileInfo(ExtFileInfo info)
     {

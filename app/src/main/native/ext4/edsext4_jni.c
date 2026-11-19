@@ -147,11 +147,12 @@ typedef struct {
 	JNIEnv *env;
 	jobject list;
 	jmethodID add;
+	jobject stats;      /* optional Collection<long[]>: {type, size, mtime} per name */
+	jmethodID addStat;
 } list_ctx;
 
-static int add_name(void *ctx, const char *name, size_t nl, int type)
+static int add_name(void *ctx, const char *name, size_t nl, const edsext4_stat *st)
 {
-	(void)type;
 	list_ctx *lc = ctx;
 	JNIEnv *env = lc->env;
 	/* Names on disk are raw bytes (usually UTF-8, possibly 4-byte sequences
@@ -168,6 +169,21 @@ static int add_name(void *ctx, const char *name, size_t nl, int type)
 		(*env)->ExceptionClear(env);
 		return EIO;
 	}
+	if (lc->stats) {
+		jlongArray a = (*env)->NewLongArray(env, 3);
+		if (!a) {
+			(*env)->ExceptionClear(env);
+			return ENOMEM;
+		}
+		jlong v[3] = {st->type & ~EDSEXT4_F_SYMLINK, (jlong)st->size, st->mtime};
+		(*env)->SetLongArrayRegion(env, a, 0, 3, v);
+		(*env)->CallBooleanMethod(env, lc->stats, lc->addStat, a);
+		(*env)->DeleteLocalRef(env, a);
+		if ((*env)->ExceptionCheck(env)) {
+			(*env)->ExceptionClear(env);
+			return EIO;
+		}
+	}
 	return 0;
 }
 
@@ -179,10 +195,26 @@ JNIEXPORT jint JNICALL JFN(list)(JNIEnv *env, jclass cls, jlong h, jstring path,
 	char *p = dup_path(env, path);
 	if (!p)
 		return ENOMEM;
-	list_ctx lc = {env, coll, NULL};
+	list_ctx lc = {env, coll, NULL, NULL, NULL};
 	jclass c = (*env)->GetObjectClass(env, coll);
 	lc.add = (*env)->GetMethodID(env, c, "add", "(Ljava/lang/Object;)Z");
 	int r = lc.add ? edsext4_list(jv->vol, p, add_name, &lc) : EINVAL;
+	free(p);
+	return r;
+}
+
+/* Like list, and also appends {type, size, mtime} (long[3]) per name to stats. */
+JNIEXPORT jint JNICALL JFN(listStat)(JNIEnv *env, jclass cls, jlong h, jstring path, jobject coll, jobject stats)
+{
+	(void)cls;
+	jvol *jv = (jvol *)(intptr_t)h;
+	char *p = dup_path(env, path);
+	if (!p)
+		return ENOMEM;
+	list_ctx lc = {env, coll, NULL, stats, NULL};
+	lc.add = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, coll), "add", "(Ljava/lang/Object;)Z");
+	lc.addStat = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, stats), "add", "(Ljava/lang/Object;)Z");
+	int r = lc.add && lc.addStat ? edsext4_list(jv->vol, p, add_name, &lc) : EINVAL;
 	free(p);
 	return r;
 }

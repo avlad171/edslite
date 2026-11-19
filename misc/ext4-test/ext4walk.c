@@ -10,22 +10,34 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* Fault injection (EDSEXT4_FAIL_AFTER=n): reads after the first n fail with EIO, like a USB
+ * drive unplugged mid-operation. The total number of reads is printed to stderr at exit. */
+static long g_reads, g_fail_after = -1;
+
 static int img_read(void *ctx, uint64_t off, void *buf, size_t len)
 {
 	int fd = *(int *)ctx;
+	if (g_fail_after >= 0 && g_reads >= g_fail_after)
+		return EIO;
+	g_reads++;
 	ssize_t r = pread(fd, buf, len, (off_t)off);
 	return r == (ssize_t)len ? 0 : EIO;
 }
 
-typedef struct { char **names; int *types; int n, cap; } list_t;
-static int collect(void *ctx, const char *name, size_t nl, int type)
+typedef struct { char **names; int *types; uint64_t *sizes; int64_t *mtimes; int n, cap; } list_t;
+static int collect(void *ctx, const char *name, size_t nl, const edsext4_stat *st)
 {
+	int type = st->type;
 	list_t *l = ctx;
 	if (l->n == l->cap) {
 		l->cap = l->cap ? l->cap * 2 : 16;
 		l->names = realloc(l->names, l->cap * sizeof(char *));
 		l->types = realloc(l->types, l->cap * sizeof(int));
+		l->sizes = realloc(l->sizes, l->cap * sizeof(uint64_t));
+		l->mtimes = realloc(l->mtimes, l->cap * sizeof(int64_t));
 	}
+	l->sizes[l->n] = st->size;
+	l->mtimes[l->n] = st->mtime;
 	l->names[l->n] = strndup(name, nl);
 	l->types[l->n++] = type;
 	return 0;
@@ -43,6 +55,11 @@ static int walk(const char *path)
 		edsext4_stat st;
 		r = edsext4_stat_path(V, p, &st);
 		if (r) { printf("ERR stat %s: %d\n", p, r); return r; }
+		/* the stat delivered with the listing must equal a separate lookup */
+		if ((l.types[i] & ~EDSEXT4_F_SYMLINK) != st.type || l.sizes[i] != st.size || l.mtimes[i] != st.mtime) {
+			printf("ERR list stat mismatch %s\n", p);
+			return EIO;
+		}
 		if (l.types[i] & EDSEXT4_F_SYMLINK) {
 			/* links are checked separately (check mode); never recurse through them */
 			printf("L %c %s\n", st.type == EDSEXT4_T_DIR ? 'D' : 'F', p);
@@ -67,7 +84,7 @@ static int walk(const char *path)
 		}
 		free(l.names[i]);
 	}
-	free(l.names); free(l.types);
+	free(l.names); free(l.types); free(l.sizes); free(l.mtimes);
 	return 0;
 }
 
@@ -94,7 +111,7 @@ static void check(void)
 			for (int a = 0; a < l.n; a++) for (int b = a + 1; b < l.n; b++)
 				if (strcmp(l.names[a], l.names[b]) > 0) { char *t = l.names[a]; l.names[a] = l.names[b]; l.names[b] = t; int u = l.types[a]; l.types[a] = l.types[b]; l.types[b] = u; }
 			for (int a = 0; a < l.n; a++) { printf(" %s%s", l.names[a], (l.types[a] & EDSEXT4_F_SYMLINK) ? "@" : ""); free(l.names[a]); }
-			free(l.names); free(l.types);
+			free(l.names); free(l.types); free(l.sizes); free(l.mtimes);
 			printf("\n");
 			continue;
 		}
@@ -112,16 +129,43 @@ static void check(void)
 
 int main(int argc, char **argv)
 {
+	const char *fa = getenv("EDSEXT4_FAIL_AFTER");
+	if (fa)
+		g_fail_after = atol(fa);
 	int fd = open(argv[1], O_RDONLY);
 	struct stat s; fstat(fd, &s);
 	int err;
 	V = edsext4_mount(img_read, &fd, (uint64_t)s.st_size, &err);
-	if (!V) { printf("ERR mount: %d\n", err); return 1; }
+	if (!V) { printf("ERR mount: %d\n", err); return g_fail_after >= 0 ? 0 : 1; }
 	edsext4_stat st;
-	if (edsext4_stat_path(V, "", &st) || st.type != EDSEXT4_T_DIR) { printf("ERR root stat\n"); return 1; }
+	if (edsext4_stat_path(V, "", &st) || st.type != EDSEXT4_T_DIR) {
+		printf("ERR root stat\n");
+		edsext4_umount(V);
+		return g_fail_after >= 0 ? 0 : 1;
+	}
 	uint64_t t, fr; edsext4_space(V, &t, &fr);
 	fprintf(stderr, "total=%" PRIu64 " free=%" PRIu64 "\n", t, fr);
-	int r = argc > 2 && !strcmp(argv[2], "check") ? (check(), 0) : walk("");
+	int r;
+	if (argc > 4 && !strcmp(argv[2], "statdir")) {
+		/* benchmark: list a directory, then stat every entry k times (like the file manager) */
+		list_t l = {0};
+		long r0 = g_reads;
+		r = edsext4_list(V, argv[3], collect, &l);
+		long r1 = g_reads;
+		int k = atoi(argv[4]);
+		for (int rep = 0; rep < k; rep++)
+			for (int i = 0; i < l.n; i++) {
+				char p[4096];
+				snprintf(p, sizeof p, "%s/%s", argv[3], l.names[i]);
+				edsext4_stat st;
+				edsext4_stat_path(V, p, &st);
+			}
+		printf("entries=%d list_reads=%ld stat_reads=%ld\n", l.n, r1 - r0, g_reads - r1);
+	} else
+		r = argc > 2 && !strcmp(argv[2], "check") ? (check(), 0) : walk("");
 	edsext4_umount(V);
+	fprintf(stderr, "reads=%ld\n", g_reads);
+	if (g_fail_after >= 0)
+		return 0; /* errors are expected; only crashes/sanitizer reports count */
 	return r ? 1 : 0;
 }

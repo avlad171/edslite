@@ -961,6 +961,9 @@ static int ext4_generic_open2(ext4_file *f, const char *path, int flags,
 	r = ext4_fs_get_inode_ref(fs, EXT4_INODE_ROOT_INDEX, &ref);
 	if (r != EOK)
 		return r;
+	/* EDS: track whether ref is held; the error exit used to put it again after a failed
+	 * put/get below (assertion in ext4_bcache_free on I/O errors). */
+	bool ref_held = true;
 
 	if (parent_inode)
 		*parent_inode = ref.index;
@@ -1052,12 +1055,14 @@ static int ext4_generic_open2(ext4_file *f, const char *path, int flags,
 		}
 
 		r = ext4_fs_put_inode_ref(&ref);
+		ref_held = false;
 		if (r != EOK)
 			break;
 
 		r = ext4_fs_get_inode_ref(fs, next_inode, &ref);
 		if (r != EOK)
 			break;
+		ref_held = true;
 
 		if (is_goal)
 			break;
@@ -1069,7 +1074,8 @@ static int ext4_generic_open2(ext4_file *f, const char *path, int flags,
 	}
 
 	if (r != EOK) {
-		ext4_fs_put_inode_ref(&ref);
+		if (ref_held)
+			ext4_fs_put_inode_ref(&ref);
 		return r;
 	}
 

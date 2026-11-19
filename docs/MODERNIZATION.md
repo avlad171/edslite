@@ -52,6 +52,13 @@ Java: `com.sovworks.eds.fs.ext4.Ext4FS`. Detected automatically inside any conta
   1. `metadata_csum_seed` support (default in e2fsprogs >= 1.47, i.e. every new ext4).
   2. **Upstream bug**: sparse files returned the contents of physical block 0 instead of zeros
      for holes in multi-block reads. Fixed.
+- I/O errors are handled at every point: `misc/ext4-test/run.sh` makes the N-th read fail for
+  every N over a full walk (~1100 runs, ASan/UBSan). Found and fixed a double inode-ref release
+  in lwext4 (EDS-PATCHES.txt #3) that crashed EDS when a USB drive was unplugged.
+- Listings return each entry's type/size/mtime from its inode (no per-entry path lookups);
+  Java caches them on the listed paths. /bin (1505 entries) on the phone: 7 s -> 1.3 s, together
+  with caching the file manager's date/size formatters (80% of the remaining time was ICU
+  formatter setup per row, an upstream EDS cost for every large folder).
 - Symbolic links are followed with chroot semantics: absolute targets resolve from the volume
   root, `..` stops at it, 40-link limit (ELOOP); broken links and loops are hidden from listings.
 - Not supported (mount fails cleanly with a message): `inline_data`, `casefold`, `encrypt`

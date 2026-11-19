@@ -724,7 +724,7 @@ public abstract class MainContentProviderBase extends ContentProvider
                     blockingGet();
             return cpi == null ?
                     null : cpi.isFile() ?
-                    FileOpsService.getMimeTypeFromExtension(getContext(), loc.getCurrentPath()) : null;
+                    FileOpsService.getMimeTypeGuess(getContext(), loc.getCurrentPath()) : null;
         }
         catch (IOException e)
         {
