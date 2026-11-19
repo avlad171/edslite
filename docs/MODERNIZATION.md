@@ -107,8 +107,13 @@ the future write path (writes only via the ext4 driver, never to raw partitions)
 - Tested against a real Ubuntu 26.10 LUKS2 (argon2id, 1 GiB) USB install
   (`misc/luks2-test/run.sh`): crypto KATs; 26 header-mutation tests; full stack mount; **all 154,185
   dpkg-tracked files (7.6 GB) verified against dpkg md5sums, 0 mismatches**.
+- Argon2: native crypto/ext4 libraries are built optimized even in debug builds (CMake Debug
+  is -O0: Argon2 was ~4x slower). Unlock on the phone (argon2id 1 GiB, t=4, p=4, 4 threads):
+  9.4 s -> 3.0 s. Progress hook between slices (16 steps) drives the progress bar and allows
+  cancelling; upstream argon2_ctx leaked the memory blocks unwiped when filling failed - fixed
+  (now wiped and freed on every exit path).
 - Not yet: ciphers other than aes-xts-plain64, ARMv8 AES instructions (Gladman AES is
-  table-based), Argon2 multithreading/progress, choosing among several LUKS partitions / LVs.
+  table-based), NEON Argon2, choosing among several LUKS partitions / LVs.
 
 ### USB mass storage (READ-ONLY, implemented)
 

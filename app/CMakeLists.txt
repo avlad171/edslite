@@ -111,7 +111,8 @@ target_compile_definitions( edsext4 PRIVATE
         CONFIG_BLOCK_DEV_CACHE_SIZE=64 CONFIG_DEBUG_PRINTF=0 CONFIG_HAVE_OWN_ASSERT=0
         CONFIG_HAVE_OWN_ERRNO=0 _FILE_OFFSET_BITS=64 )
 # Assertions stay on (abort beats memory corruption on a malformed volume).
-target_compile_options( edsext4 PRIVATE -UNDEBUG -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-parameter )
+# -O2 even in debug builds (CMake Debug = -O0, ~4x slower; the last -O flag wins).
+target_compile_options( edsext4 PRIVATE -O2 -UNDEBUG -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-parameter )
 target_link_libraries( edsext4 ${log-lib} )
 
 # LUKS2 crypto (Argon2 reference + AES-XTS on Gladman AES). Read-only: decrypt only.
@@ -125,7 +126,8 @@ add_library( edsluks
 target_include_directories( edsluks PRIVATE src/main/native/aes src/main/native/crypto
         src/main/native/argon2/include src/main/native/argon2/src )
 target_compile_definitions( edsluks PRIVATE AES_128 )
-target_compile_options( edsluks PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-function )
+# -O3 even in debug builds: Argon2 at -O0 is ~4x slower (argon2id 1 GiB t=4: ~9 s vs ~2 s).
+target_compile_options( edsluks PRIVATE -O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wno-unused-function )
 target_link_libraries( edsluks ${log-lib} )
 
 include(CMakeLists-full.txt)

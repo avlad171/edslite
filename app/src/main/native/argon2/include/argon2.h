@@ -96,6 +96,15 @@ extern "C" {
  * is defined in core.c and defaults to 1 (wipe internal memory). */
 extern int FLAG_clear_internal_memory;
 
+/* EDS: returned by argon2_ctx when the progress hook asked to stop. */
+#define ARGON2_EDS_CANCELLED (-100)
+
+/* EDS: progress / cancellation hook for the calling thread (NULL to remove). cb gets
+ * (ctx, steps done, total steps) after each slice; a non-zero return aborts with
+ * ARGON2_EDS_CANCELLED. Memory is wiped and freed on every exit path. */
+typedef int (*argon2_eds_progress_fn)(void *ctx, uint32_t done, uint32_t total);
+ARGON2_PUBLIC void argon2_eds_set_progress(argon2_eds_progress_fn cb, void *ctx);
+
 /* Error codes */
 typedef enum Argon2_ErrorCodes {
     ARGON2_OK = 0,

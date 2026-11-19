@@ -48,3 +48,6 @@
 -dontnote android.support.**
 
 -dontwarn java.awt.*
+
+# Called from native code (libedsluks) by method name.
+-keep interface com.sovworks.eds.luks2.Luks2Native$Progress { *; }

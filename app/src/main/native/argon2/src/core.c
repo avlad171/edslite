@@ -256,6 +256,23 @@ uint32_t index_alpha(const argon2_instance_t *instance,
     return absolute_position;
 }
 
+/* EDS: progress / cancellation hook, per calling thread. Called on the calling thread after
+ * each slice of each pass (passes * ARGON2_SYNC_POINTS steps). Non-zero return aborts. */
+static __thread argon2_eds_progress_fn eds_progress_cb;
+static __thread void *eds_progress_ctx;
+
+void argon2_eds_set_progress(argon2_eds_progress_fn cb, void *ctx) {
+    eds_progress_cb = cb;
+    eds_progress_ctx = ctx;
+}
+
+static int eds_report(const argon2_instance_t *instance, uint32_t r, uint32_t s) {
+    if (eds_progress_cb == NULL)
+        return 0;
+    return eds_progress_cb(eds_progress_ctx, r * ARGON2_SYNC_POINTS + s + 1,
+                           instance->passes * ARGON2_SYNC_POINTS);
+}
+
 /* Single-threaded version for p=1 case */
 static int fill_memory_blocks_st(argon2_instance_t *instance) {
     uint32_t r, s, l;
@@ -266,6 +283,8 @@ static int fill_memory_blocks_st(argon2_instance_t *instance) {
                 argon2_position_t position = {r, l, (uint8_t)s, 0};
                 fill_segment(instance, position);
             }
+            if (eds_report(instance, r, s))
+                return ARGON2_EDS_CANCELLED;
         }
 #ifdef GENKAT
         internal_kat(instance, r); /* Print all memory blocks */
@@ -353,6 +372,10 @@ static int fill_memory_blocks_mt(argon2_instance_t *instance) {
                     rc = ARGON2_THREAD_FAIL;
                     goto fail;
                 }
+            }
+            if (eds_report(instance, r, s)) {
+                rc = ARGON2_EDS_CANCELLED;
+                goto fail;
             }
         }
 

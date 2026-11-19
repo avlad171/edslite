@@ -7,7 +7,17 @@ final class Luks2Native
 
     static native int getVersion();
     /** @return 0 or an Argon2 error code (&lt;0) */
-    static native int argon2(int type, byte[] password, byte[] salt, int t, int memoryKiB, int lanes, byte[] out);
+    /** Called from native code between Argon2 slices; return false to cancel. */
+    interface Progress
+    {
+        boolean onProgress(int done, int total);
+    }
+
+    /** Returned by argon2 when Progress.onProgress returned false (memory is wiped and freed). */
+    static final int ARGON2_CANCELLED = -100;
+
+    static native int argon2(int type, byte[] password, byte[] salt, int t, int memoryKiB, int lanes, byte[] out,
+                             Progress progress);
     static native String argon2Error(int code);
     /** @return opaque AES-XTS context, or 0 on bad key size. Caller wipes key. */
     static native long xtsNew(byte[] key);

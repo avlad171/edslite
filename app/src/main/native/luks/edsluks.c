@@ -120,9 +120,24 @@ JNIEXPORT jint JNICALL JFN(getVersion)(JNIEnv *env, jclass cls)
 	return 1;
 }
 
-/* type: 1 = argon2i, 2 = argon2id. Returns 0 or an ARGON2_* error code (<0). */
+typedef struct { JNIEnv *env; jobject cb; jmethodID m; } prog_ctx;
+
+/* Runs on the thread that called argon2 (between slices), so env is valid. */
+static int on_progress(void *ctx, uint32_t done, uint32_t total)
+{
+	prog_ctx *pc = ctx;
+	jboolean go = (*pc->env)->CallBooleanMethod(pc->env, pc->cb, pc->m, (jint)done, (jint)total);
+	if ((*pc->env)->ExceptionCheck(pc->env)) {
+		(*pc->env)->ExceptionClear(pc->env);
+		return 1;
+	}
+	return go ? 0 : 1;
+}
+
+/* type: 1 = argon2i, 2 = argon2id. progress: optional Luks2Native.Progress (onProgress(done,
+ * total) -> false cancels). Returns 0 or an ARGON2_* error code (<0). */
 JNIEXPORT jint JNICALL JFN(argon2)(JNIEnv *env, jclass cls, jint type, jbyteArray pw, jbyteArray salt,
-				   jint t, jint mKiB, jint lanes, jbyteArray out)
+				   jint t, jint mKiB, jint lanes, jbyteArray out, jobject progress)
 {
 	(void)cls;
 	jsize pl, sl, ol;
@@ -141,7 +156,17 @@ JNIEXPORT jint JNICALL JFN(argon2)(JNIEnv *env, jclass cls, jint type, jbyteArra
 		c.lanes = (uint32_t)lanes; c.threads = (uint32_t)lanes;
 		c.version = ARGON2_VERSION_13;
 		c.flags = ARGON2_DEFAULT_FLAGS; /* argon2 wipes its memory blocks itself */
-		r = argon2_ctx(&c, type == 1 ? Argon2_i : Argon2_id);
+		prog_ctx pc = {env, progress, NULL};
+		if (progress)
+			pc.m = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, progress), "onProgress", "(II)Z");
+		if (progress && !pc.m) {
+			(*env)->ExceptionClear(env);
+			r = ARGON2_INCORRECT_PARAMETER;
+		} else {
+			argon2_eds_set_progress(progress ? on_progress : NULL, &pc);
+			r = argon2_ctx(&c, type == 1 ? Argon2_i : Argon2_id);
+			argon2_eds_set_progress(NULL, NULL);
+		}
 		if (r == ARGON2_OK)
 			(*env)->SetByteArrayRegion(env, out, 0, ol, (jbyte *)o);
 	}

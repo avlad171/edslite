@@ -136,8 +136,24 @@ public class UsbLuksLocation extends EDSLocationBase
             byte[] pw = getFinalPassword();
             try
             {
-                vol = Luks2Volume.unlock(f.part, f.header, pw,
-                        (id, kdf) -> report("Checking the password (" + kdf + ", keyslot " + id + ")…"));
+                vol = Luks2Volume.unlock(f.part, f.header, pw, new Luks2Volume.ProgressListener()
+                {
+                    @Override
+                    public void onKeyslot(String id, String kdf)
+                    {
+                        report("Checking the password (" + kdf + ", keyslot " + id + ")…");
+                    }
+
+                    @Override
+                    public boolean onKdfProgress(int done, int total)
+                    {
+                        ProgressReporter r = _openingProgressReporter;
+                        if (r == null)
+                            return true;
+                        r.setProgress(done * 100 / Math.max(1, total));
+                        return !r.isCancelled();
+                    }
+                });
             }
             catch (Luks2WrongPassphraseException e)
             {
@@ -354,7 +370,7 @@ public class UsbLuksLocation extends EDSLocationBase
         if (r != null)
         {
             r.setText(text);
-            r.setProgress(-1); // no percentage available (Argon2 runs as one native call)
+            r.setProgress(-1); // indeterminate until Argon2 reports progress
         }
     }
 

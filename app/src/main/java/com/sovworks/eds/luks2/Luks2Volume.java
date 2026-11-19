@@ -23,6 +23,9 @@ public final class Luks2Volume implements Closeable, Luks2Header.Source
     public interface ProgressListener
     {
         void onKeyslot(String keyslotId, String kdfType);
+
+        /** Argon2 progress for the current keyslot; return false to cancel the unlock. */
+        default boolean onKdfProgress(int done, int total) { return true; }
     }
 
     public static Luks2Volume unlock(Luks2Header.Source src, Luks2Header hdr, byte[] passphrase,
@@ -44,7 +47,7 @@ public final class Luks2Volume implements Closeable, Luks2Header.Source
                     continue;
                 if (progress != null)
                     progress.onKeyslot(ks.id, ks.kdf.type);
-                byte[] mk = openKeyslot(src, ks, passphrase);
+                byte[] mk = openKeyslot(src, ks, passphrase, progress);
                 try
                 {
                     if (verify(dg, mk))
@@ -77,7 +80,8 @@ public final class Luks2Volume implements Closeable, Luks2Header.Source
         return null;
     }
 
-    private static byte[] openKeyslot(Luks2Header.Source src, Luks2Header.Keyslot ks, byte[] pw) throws IOException
+    private static byte[] openKeyslot(Luks2Header.Source src, Luks2Header.Keyslot ks, byte[] pw,
+                                      ProgressListener progress) throws IOException
     {
         if (!isSupportedCipher(ks.areaEncryption))
             throw new Luks2Exception("unsupported keyslot cipher " + ks.areaEncryption);
@@ -92,7 +96,10 @@ public final class Luks2Volume implements Closeable, Luks2Header.Source
             else
             {
                 int r = Luks2Native.argon2("argon2i".equals(k.type) ? Luks2Native.ARGON2I : Luks2Native.ARGON2ID,
-                        pw, k.salt, (int) k.time, (int) k.memoryKiB, (int) k.cpus, areaKey);
+                        pw, k.salt, (int) k.time, (int) k.memoryKiB, (int) k.cpus, areaKey,
+                        progress == null ? null : progress::onKdfProgress);
+                if (r == Luks2Native.ARGON2_CANCELLED)
+                    throw new java.util.concurrent.CancellationException("unlock cancelled");
                 if (r != 0)
                     throw new Luks2Exception("Argon2 failed: " + Luks2Native.argon2Error(r)
                             + (r == -22 ? " (needs " + k.memoryKiB / 1024 + " MiB of RAM)" : ""));

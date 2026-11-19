@@ -14,7 +14,7 @@ public class CryptoSelfTest
         Luks2Native.ensureLoaded();
         // Argon2id v1.3 KAT from the reference package (test.c): t=2, m=2^16, p=1, "password"/"somesalt"
         byte[] out = new byte[32];
-        int r = Luks2Native.argon2(Luks2Native.ARGON2ID, "password".getBytes(), "somesalt".getBytes(), 2, 65536, 1, out);
+        int r = Luks2Native.argon2(Luks2Native.ARGON2ID, "password".getBytes(), "somesalt".getBytes(), 2, 65536, 1, out, null);
         String want = "09316115d5cf24ed5a15a31a3ba326e5cf32edc24702987c02b6566f61913cf7";
         check("argon2id KAT", r == 0 && HexFormat.of().formatHex(out).equals(want));
 

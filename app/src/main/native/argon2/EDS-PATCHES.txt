@@ -1,0 +1,12 @@
+Changes to the vendored Argon2 reference implementation (see VENDORED.txt for the base):
+
+1. Progress / cancellation hook (include/argon2.h, src/core.c): argon2_eds_set_progress()
+   installs a per-thread callback that fill_memory_blocks calls on the calling thread after
+   each slice of each pass (passes * 4 steps). A non-zero return aborts with
+   ARGON2_EDS_CANCELLED (-100). Used for the unlock progress bar and the Cancel button.
+2. argon2_ctx (src/argon2.c): when fill_memory_blocks failed, upstream returned without
+   freeing - or wiping - the memory blocks (up to 1 GiB of passphrase-derived data). They are
+   now wiped and freed on that path too.
+
+The hook, the unchanged output with it installed, cancellation and wipe-on-cancel are tested
+with a custom free callback; the argon2id known-answer test is in misc/luks2-test.
